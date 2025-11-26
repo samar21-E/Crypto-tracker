@@ -1,199 +1,258 @@
+
+
+# 🚀 Crypto Tracker – Spring Boot · Binance API · TimescaleDB · Alerts
+
+A production-grade crypto price monitoring service built with **Spring Boot 3**, **Java 17+**, **TimescaleDB**, **Binance API**, **feature flags**, and **email alerting**.
+It tracks selected cryptocurrencies, stores historical prices efficiently, and triggers configurable alerts.
+
 ---
 
-# 📈 Crypto Tracker – Spring Boot + PostgreSQL + TimescaleDB
+# 📊 Features
 
-A real-time Bitcoin price tracker powered by Spring Boot, Binance API, PostgreSQL, and TimescaleDB hypertables.
+### ✅ **1. Real-time price fetching (Binance API)**
 
-This application fetches and stores **BTC/USDT** price every 10 seconds, saving it into a TimescaleDB hypertable for optimized time-series storage and future analytics.
-
----
-
-## 🚀 Features Implemented
-
-### ✅ 1. Scheduled Price Fetching
-
-A Spring `@Scheduled` task runs every **10 seconds**, calling the official **Binance API**:
+Fetches live prices using:
 
 ```
 GET https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
 ```
 
-The current BTC price is retrieved and stored in the database.
+Implemented in:
+`BinancePriceService.java`
 
 ---
 
-### ✅ 2. TimescaleDB Hypertable Storage
+### ✅ **2. Track specific coins (BTC, ETH, SOL...)**
 
-Your database is powered by **TimescaleDB**, which automatically optimizes time-series inserts.
-
-Structure:
-
-| Column | Type        | Description        |
-| ------ | ----------- | ------------------ |
-| time   | timestamptz | Primary key part 1 |
-| symbol | text        | Primary key part 2 |
-| price  | double      | Stored BTC price   |
-
----
-
-### ✅ 3. Composite Primary Key
-
-Each row is uniquely identified by:
-
-* `Instant time`
-* `String symbol`
-
-This is implemented using `@Embeddable`:
-
-```java
-@Embeddable
-public class CryptoPriceId implements Serializable {
-    private Instant time;
-    private String symbol;
-}
-```
-
-And embedded in the entity:
-
-```java
-@Entity
-public class CryptoPrice {
-    @EmbeddedId
-    private CryptoPriceId id;
-    private double price;
-}
-```
-
-Spring/Hibernate errors were fixed by adding:
-
-* No-args constructor
-* Serializable implementation
-* Correct JPQL path (`c.id.symbol` instead of `c.symbol`)
-
----
-
-### ✅ 4. JPA Repository with Custom Query
-
-```java
-@Query("SELECT c FROM CryptoPrice c WHERE c.id.symbol = :symbol ORDER BY c.id.time DESC")
-CryptoPrice findTopBySymbolOrderByTimeDesc(String symbol);
-```
-
-Spring adds the `LIMIT 1` automatically.
-
----
-
-### ✅ 5. REST Endpoints Implemented
-
-| Method | Endpoint         | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| GET    | `/prices`        | Get all stored prices             |
-| GET    | `/prices/latest` | Get latest BTC/USDT price         |
-| POST   | `/prices`        | Manually insert a price (testing) |
-
----
-
-### ✅ 6. Dockerized PostgreSQL / TimescaleDB
-
-Your running container:
+Add/remove/update tracked coins via:
 
 ```
-docker run --name timescale_crypto ^
+POST /api/tracked-coins
+GET  /api/tracked-coins
+PUT  /api/tracked-coins/{id}
+DELETE /api/tracked-coins/{id}
+```
+
+Controller:
+`TrackedCoinController.java`
+
+---
+
+### ✅ **3. Scheduled alert checker**
+
+Runs every **30 seconds** (configurable):
+
+```
+alerts.check-interval-ms=30000
+feature.alerts.enabled=true
+```
+
+If `currentPrice >= alertPrice`, an alert is fired once and persisted.
+
+Service:
+`TrackedCoinAlertService.java`
+
+---
+
+### ✅ **4. Email notifications**
+
+When an alert triggers, an email is sent:
+
+```
+alertNotificationService.sendPriceAlert(coin, currentPrice);
+```
+
+Configured via:
+
+```
+spring.mail.host
+spring.mail.username
+spring.mail.password
+alerts.email.to
+```
+
+Service:
+`EmailAlertNotificationService.java`
+
+---
+
+### ✅ **5. Historical price storage (TimescaleDB Hypertable)**
+
+Entity:
+`CryptoPriceHistory.java`
+
+Repository:
+`CryptoPriceHistoryRepository.java`
+
+Spring saves a new row every check, enabling:
+
+✔ fast queries
+✔ compression
+✔ aggregation
+✔ analytics
+
+Hypertable creation:
+
+```sql
+SELECT create_hypertable('price_history', 'timestamp', if_not_exists => TRUE);
+```
+
+---
+
+### ✅ **6. Full REST API for price history**
+
+```
+GET /api/prices/all
+GET /api/prices/latest
+GET /api/prices/recent
+```
+
+Controller:
+`CryptoPriceController.java`
+
+---
+
+### ✅ **7. OpenAPI / Swagger UI enabled**
+
+Launch:
+
+```
+http://localhost:8080/v3/api-docs
+http://localhost:8080/swagger-ui/index.html
+```
+
+---
+
+### ✅ **8. Ready for Observability**
+
+Using:
+
+✔ OpenTelemetry (traces)
+✔ Micrometer
+✔ Logging exporter (dev mode)
+
+Configuration:
+
+```
+management.tracing.enabled=true
+management.tracing.sampling.probability=1.0
+logging.level.io.micrometer.tracing=DEBUG
+```
+
+---
+
+### ✅ **9. Dockerized TimescaleDB**
+
+Run:
+
+```powershell
+docker run -d ^
+  --name timescaledb ^
+  -p 5432:5432 ^
   -e POSTGRES_PASSWORD=postgres ^
   -e POSTGRES_DB=crypto_db ^
-  -p 5432:5432 ^
-  -d timescale/timescaledb-ha:pg15-latest
-```
-
-Inside psql:
-
-```
-CREATE DATABASE crypto_db;
-\c crypto_db;
-
-CREATE TABLE crypto_prices (
-    time TIMESTAMPTZ NOT NULL,
-    symbol TEXT NOT NULL,
-    price DOUBLE PRECISION,
-    PRIMARY KEY (time, symbol)
-);
-
-SELECT create_hypertable('crypto_prices', 'time', if_not_exists => TRUE);
+  timescale/timescaledb:latest-pg16
 ```
 
 ---
 
-## 🧱 Project Structure
+# 🧱 Architecture
 
 ```
-src/main/java/com/fwkproject/crypto_tracker
+src/main/java/com.fwkproject.crypto_tracker
 │
-├─ controller/
-│   └── CryptoPriceController.java
+├── controller/
+│   ├── CryptoController
+│   ├── CryptoPriceController
+│   ├── TrackedCoinController
+│   └── HomeController
 │
-├─ service/
-│   └── CryptoPriceService.java
+├── model/
+│   ├── TrackedCoin
+│   ├── CryptoPriceHistory
+│   ├── CryptoPrice
+│   └── CryptoPriceId
 │
-├─ repository/
-│   └── CryptoPriceRepository.java
+├── service/
+│   ├── BinancePriceService
+│   ├── TrackedCoinAlertService
+│   ├── AlertNotificationService
+│   ├── EmailAlertNotificationService
+│   ├── CryptoPriceHistoryService
+│   └── CryptoPriceService
 │
-└─ model/
-    ├── CryptoPrice.java
-    └── CryptoPriceId.java
+└── repository/
+    ├── TrackedCoinRepository
+    ├── CryptoPriceRepository
+    └── CryptoPriceHistoryRepository
 ```
 
 ---
 
-## 🔧 Technologies Used
+# ⚙️ Configuration Highlights
 
-* **Java 23**
-* **Spring Boot 3.5**
-* **Spring Data JPA**
-* **TimescaleDB (PostgreSQL)**
-* **RestTemplate (Binance API)**
-* **Docker**
-* **Lombok**
+### **Application properties**
 
----
+```properties
+spring.datasource.url=jdbc:postgresql://localhost:5432/crypto_db
+spring.datasource.username=postgres
+spring.datasource.password=postgres
 
-## 📊 Current State
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
 
-You now have a **fully working backend** that:
+# Alerts
+feature.alerts.enabled=true
+alerts.check-interval-ms=30000
+alerts.email.to=your-email@example.com
 
-✔ Fetches BTC price every 10 seconds
-✔ Stores each data point efficiently
-✔ Exposes REST endpoints
-✔ Runs on Dockerized TimescaleDB
-✔ Uses a correct composite primary key
-✔ Avoids all JPA/Hibernate errors
-
----
-
-## 🛠️ Next Steps (if you want)
-
-I can help you implement:
-
-### 🔥 1. Real-time WebSocket price updates
-
-Allow frontend charts to update instantly.
-
-### 🔥 2. Frontend dashboard (React or Vue)
-
-Live price chart (line, candlestick), latest value, historical stats.
-
-### 🔥 3. Support for multiple coins
-
-BTC, ETH, SOL, DOGE, etc.
-
-### 🔥 4. Price aggregation
-
-* 1m, 5m, 1h candles
-* OHLCV generation
-* Moving averages (MA/EMA)
-
-### 🔥 5. Alerts (email, SMS, Telegram)
-
-Trigger alert when price crosses a threshold.
+# Email (example Gmail)
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=YOUR_SMTP_USERNAME
+spring.mail.password=YOUR_SMTP_PASSWORD
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+```
 
 ---
 
+# ▶️ Running the App
+
+### **Start backend**
+
+```
+mvn spring-boot:run
+```
+
+### **Start TimescaleDB**
+
+```
+docker start timescaledb
+```
+
+### **Access Swagger UI**
+
+```
+http://localhost:8080/swagger-ui/index.html
+```
+
+---
+
+# 🚀 Next Features
+
+Here are the next steps we can add:
+
+### 🔥 1. WebSockets for real-time updates
+
+### 🔥 2. Frontend dashboard (Vue, React, or Angular)
+
+### 🔥 3. Candlestick aggregation (1m, 5m, 1h)
+
+### 🔥 4. Telegram bot alerts
+
+### 🔥 5. CPU/memory tracing with OpenTelemetry Exporter
+
+### 🔥 6. Native AOT build + Docker optimized
+
+---

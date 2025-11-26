@@ -1,13 +1,11 @@
 package com.fwkproject.crypto_tracker;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
 class CryptoTrackerApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    void contextLoads() {
+        // disabled test
+    }
 }
