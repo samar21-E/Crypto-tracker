@@ -1,258 +1,72 @@
+# Crypto Tracker
 
+A robust, cloud-native crypto tracking application built with **Spring Boot 3** and **Pyramidal Architecture**.
 
-# 🚀 Crypto Tracker – Spring Boot · Binance API · TimescaleDB · Alerts
+## 🚀 Features
 
-A production-grade crypto price monitoring service built with **Spring Boot 3**, **Java 17+**, **TimescaleDB**, **Binance API**, **feature flags**, and **email alerting**.
-It tracks selected cryptocurrencies, stores historical prices efficiently, and triggers configurable alerts.
+*   **Real-time Tracking**: Monitor crypto prices (e.g., BTCUSDT) via Binance API.
+*   **Price Alerts**: Set thresholds and receive email notifications when triggered.
+*   **Time-Series Data**: Efficiently store price history in **TimescaleDB**.
+*   **Observability**: Full tracing with **OpenTelemetry**.
+*   **Feature Flags**: Enable/Disable features dynamically using **Togglz**.
+*   **Cloud Native**: **K0s** / Kubernetes ready with native manifests.
+*   **AOT Ready**: Compiles to a native executable using GraalVM.
 
----
+## 🏗 Architecture
 
-# 📊 Features
+The project follows a **Pyramidal (Clean) Architecture**:
 
-### ✅ **1. Real-time price fetching (Binance API)**
+*   **`domain`**: Pure business entities (`TrackedCoin`, `CryptoPrice`) and repository interfaces. No Spring dependencies.
+*   **`application`**: Business logic services (`CryptoPriceService`, `TrackedCoinService`) and ports (`NotificationPort`).
+*   **`infrastructure`**: Adapters for persistence (JPA), external APIs (Binance), and configuration.
 
-Fetches live prices using:
+## 🛠 Technology Stack
 
-```
-GET https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
-```
+1.  **OpenTelemetry**: Distributed tracing.
+2.  **K0s / Kubernetes**: Deployment manifests included.
+3.  **TimescaleDB**: PostgreSQL optimized for time-series data.
+4.  **Feature Flags**: Managed via Togglz.
+5.  **AOT Native Compiler**: Built with GraalVM.
 
-Implemented in:
-`BinancePriceService.java`
+## 🏃‍♂️ How to Run
 
----
+### Prerequisites
+*   Java 17+
+*   Maven 3.8+
+*   PostgreSQL / TimescaleDB running on port 5432.
 
-### ✅ **2. Track specific coins (BTC, ETH, SOL...)**
-
-Add/remove/update tracked coins via:
-
-```
-POST /api/tracked-coins
-GET  /api/tracked-coins
-PUT  /api/tracked-coins/{id}
-DELETE /api/tracked-coins/{id}
-```
-
-Controller:
-`TrackedCoinController.java`
-
----
-
-### ✅ **3. Scheduled alert checker**
-
-Runs every **30 seconds** (configurable):
-
-```
-alerts.check-interval-ms=30000
-feature.alerts.enabled=true
+### 1. Start Database
+```bash
+docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=password timescale/timescaledb:latest-pg14
 ```
 
-If `currentPrice >= alertPrice`, an alert is fired once and persisted.
-
-Service:
-`TrackedCoinAlertService.java`
-
----
-
-### ✅ **4. Email notifications**
-
-When an alert triggers, an email is sent:
-
-```
-alertNotificationService.sendPriceAlert(coin, currentPrice);
-```
-
-Configured via:
-
-```
-spring.mail.host
-spring.mail.username
-spring.mail.password
-alerts.email.to
-```
-
-Service:
-`EmailAlertNotificationService.java`
-
----
-
-### ✅ **5. Historical price storage (TimescaleDB Hypertable)**
-
-Entity:
-`CryptoPriceHistory.java`
-
-Repository:
-`CryptoPriceHistoryRepository.java`
-
-Spring saves a new row every check, enabling:
-
-✔ fast queries
-✔ compression
-✔ aggregation
-✔ analytics
-
-Hypertable creation:
-
-```sql
-SELECT create_hypertable('price_history', 'timestamp', if_not_exists => TRUE);
-```
-
----
-
-### ✅ **6. Full REST API for price history**
-
-```
-GET /api/prices/all
-GET /api/prices/latest
-GET /api/prices/recent
-```
-
-Controller:
-`CryptoPriceController.java`
-
----
-
-### ✅ **7. OpenAPI / Swagger UI enabled**
-
-Launch:
-
-```
-http://localhost:8080/v3/api-docs
-http://localhost:8080/swagger-ui/index.html
-```
-
----
-
-### ✅ **8. Ready for Observability**
-
-Using:
-
-✔ OpenTelemetry (traces)
-✔ Micrometer
-✔ Logging exporter (dev mode)
-
-Configuration:
-
-```
-management.tracing.enabled=true
-management.tracing.sampling.probability=1.0
-logging.level.io.micrometer.tracing=DEBUG
-```
-
----
-
-### ✅ **9. Dockerized TimescaleDB**
-
-Run:
-
-```powershell
-docker run -d ^
-  --name timescaledb ^
-  -p 5432:5432 ^
-  -e POSTGRES_PASSWORD=postgres ^
-  -e POSTGRES_DB=crypto_db ^
-  timescale/timescaledb:latest-pg16
-```
-
----
-
-# 🧱 Architecture
-
-```
-src/main/java/com.fwkproject.crypto_tracker
-│
-├── controller/
-│   ├── CryptoController
-│   ├── CryptoPriceController
-│   ├── TrackedCoinController
-│   └── HomeController
-│
-├── model/
-│   ├── TrackedCoin
-│   ├── CryptoPriceHistory
-│   ├── CryptoPrice
-│   └── CryptoPriceId
-│
-├── service/
-│   ├── BinancePriceService
-│   ├── TrackedCoinAlertService
-│   ├── AlertNotificationService
-│   ├── EmailAlertNotificationService
-│   ├── CryptoPriceHistoryService
-│   └── CryptoPriceService
-│
-└── repository/
-    ├── TrackedCoinRepository
-    ├── CryptoPriceRepository
-    └── CryptoPriceHistoryRepository
-```
-
----
-
-# ⚙️ Configuration Highlights
-
-### **Application properties**
-
+### 2. Configure Email (Optional)
+Add to `application.properties` or environment variables:
 ```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/crypto_db
-spring.datasource.username=postgres
-spring.datasource.password=postgres
-
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-
-# Alerts
-feature.alerts.enabled=true
-alerts.check-interval-ms=30000
-alerts.email.to=your-email@example.com
-
-# Email (example Gmail)
 spring.mail.host=smtp.gmail.com
-spring.mail.port=587
-spring.mail.username=YOUR_SMTP_USERNAME
-spring.mail.password=YOUR_SMTP_PASSWORD
-spring.mail.properties.mail.smtp.auth=true
-spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.username=your-email@gmail.com
+spring.mail.password=your-app-password
+alerts.email.to=recipient@example.com
 ```
 
----
-
-# ▶️ Running the App
-
-### **Start backend**
-
-```
+### 3. Run Locally
+```bash
 mvn spring-boot:run
 ```
 
-### **Start TimescaleDB**
-
-```
-docker start timescaledb
-```
-
-### **Access Swagger UI**
-
-```
-http://localhost:8080/swagger-ui/index.html
+### 4. Build Native Image
+```bash
+mvn -Pnative native:compile
 ```
 
----
+## 🧪 API Endpoints
 
-# 🚀 Next Features
+*   **POST** `/api/tracked-coins`: Track a new coin `{ "symbol": "ETHUSDT", "alertPrice": 3000.0 }`.
+*   **GET** `/api/crypto-prices/latest?symbol=ETHUSDT`: Get latest price.
+*   **GET** `/actuator/togglz`: Manage feature flags.
 
-Here are the next steps we can add:
-
-### 🔥 1. WebSockets for real-time updates
-
-### 🔥 2. Frontend dashboard (Vue, React, or Angular)
-
-### 🔥 3. Candlestick aggregation (1m, 5m, 1h)
-
-### 🔥 4. Telegram bot alerts
-
-### 🔥 5. CPU/memory tracing with OpenTelemetry Exporter
-
-### 🔥 6. Native AOT build + Docker optimized
-
----
+## ☸️ Deploy to K0s
+```bash
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```

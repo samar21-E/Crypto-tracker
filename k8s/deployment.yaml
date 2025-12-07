@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto-tracker
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crypto-tracker
+  template:
+    metadata:
+      labels:
+        app: crypto-tracker
+    spec:
+      containers:
+        - name: crypto-tracker
+          image: new-crypto-tracker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "k8s"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crypto-tracker-svc
+  namespace: default
+spec:
+  selector:
+    app: crypto-tracker
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
